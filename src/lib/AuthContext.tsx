@@ -16,24 +16,38 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-async function readProfile(userId: string): Promise<AuthProfile> {
+async function readProfile(userId: string): Promise<AuthProfile | null> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, full_name, role')
+    .select('id, full_name, role, identity_type, program, year_level, section, school_name, onboarding_completed')
     .eq('id', userId)
     .maybeSingle();
 
   if (error) throw error;
-  if (!data) throw new Error('Your account profile could not be found. Please retry or log out.');
+  if (!data) return null;
   if (data.role !== 'teacher' && data.role !== 'student') {
     throw new Error('Your account has an invalid role. Please contact your CHEMLAB administrator.');
   }
 
-  return { id: data.id, full_name: data.full_name, role: data.role };
+  return {
+    id: data.id,
+    full_name: data.full_name,
+    role: data.role,
+    identity_type: data.identity_type,
+    program: data.program,
+    year_level: data.year_level,
+    section: data.section,
+    school_name: data.school_name,
+    onboarding_completed: Boolean(data.onboarding_completed),
+  };
 }
 
-export async function getProfileForUser(userId: string): Promise<AuthProfile> {
-  return readProfile(userId);
+export async function getProfileForUser(userId: string): Promise<AuthProfile | null> {
+  try { return await readProfile(userId); }
+  catch (error) {
+    if (import.meta.env.DEV) console.error('CHEMLAB signup profile load failed', error);
+    throw new Error('Your CHEMLAB profile could not be loaded. Please retry.');
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -57,7 +71,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(await readProfile(currentUser.id));
     } catch (caught) {
       setProfile(null);
-      setProfileError(caught instanceof Error ? caught.message : 'Your account profile could not be loaded.');
+      if (import.meta.env.DEV) console.error('CHEMLAB profile refresh failed', caught);
+      setProfileError('Your account profile could not be loaded. Please retry or log out.');
     } finally {
       setLoading(false);
     }
@@ -81,7 +96,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const nextProfile = await readProfile(nextUser.id);
         if (active && requestId === id) setProfile(nextProfile);
       } catch (caught) {
-        if (active && requestId === id) setProfileError(caught instanceof Error ? caught.message : 'Your account profile could not be loaded.');
+        if (active && requestId === id) {
+          if (import.meta.env.DEV) console.error('CHEMLAB profile load failed', caught);
+          setProfileError('Your account profile could not be loaded. Please retry or log out.');
+        }
       } finally {
         if (active && requestId === id) setLoading(false);
       }
@@ -94,7 +112,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!active) return;
       setUser(null);
       setProfile(null);
-      setProfileError(caught instanceof Error ? caught.message : 'Supabase authentication is unavailable.');
+      if (import.meta.env.DEV) console.error('CHEMLAB session load failed', caught);
+      setProfileError('Supabase authentication is unavailable. Please refresh and try again.');
       setLoading(false);
     });
 

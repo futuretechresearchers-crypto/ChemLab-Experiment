@@ -1,7 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { getCurrentProfile } from '../lib/auth';
+import { useEffect, useState } from 'react';
 import { deleteQuizActivity, listTeacherActivities, publishQuizActivity, saveQuizActivity, type QuizActivity, type QuizQuestion, type QuestionType } from '../lib/quizService';
-import { supabase } from '../lib/supabase';
 
 const emptyQuestion = (): QuizQuestion => ({
   question_type: 'multiple_choice',
@@ -35,17 +33,14 @@ export function TeacherQuizBuilder() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const [teacherName, setTeacherName] = useState('Teacher');
-
   const loadActivities = async () => {
     try {
-      const profile = await getCurrentProfile();
-      if (profile) setTeacherName(profile.full_name || 'Teacher');
       const next = await listTeacherActivities();
       setActivities(next);
       setError(null);
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'Unable to load activities.');
+      if (import.meta.env.DEV) console.error('Teacher activities load failed', caughtError);
+      setError('Activities could not be loaded. Please retry.');
     } finally {
       setLoading(false);
     }
@@ -98,7 +93,8 @@ export function TeacherQuizBuilder() {
       setStatus('Draft saved successfully.');
       await loadActivities();
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'The draft could not be saved.');
+      if (import.meta.env.DEV) console.error('Quiz draft save failed', caughtError);
+      setError('The draft could not be saved. Please retry.');
     }
   };
 
@@ -119,7 +115,8 @@ export function TeacherQuizBuilder() {
       setStatus('Activity published. Share link is ready below.');
       await loadActivities();
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'The activity could not be published.');
+      if (import.meta.env.DEV) console.error('Quiz publish failed', caughtError);
+      setError('The activity could not be published. Please retry.');
     }
   };
 
@@ -140,7 +137,19 @@ export function TeacherQuizBuilder() {
       if (editor?.id === quizId) setEditor(null);
       setStatus('Activity deleted.');
     } catch (caughtError) {
-      setError(caughtError instanceof Error ? caughtError.message : 'Unable to delete the activity.');
+      if (import.meta.env.DEV) console.error('Quiz delete failed', caughtError);
+      setError('The activity could not be deleted. Please retry.');
+    }
+  };
+
+  const publishExisting = async (activity: QuizActivity) => {
+    try {
+      const next = await publishQuizActivity({ ...activity, published: true, share_code: activity.share_code || '' });
+      setActivities(current => current.map(item => item.id === next.id ? next : item));
+      setStatus('Activity published. Share link is ready.'); setError(null);
+    } catch (caughtError) {
+      if (import.meta.env.DEV) console.error('Quiz publish failed', caughtError);
+      setError('The activity could not be published. Please retry.');
     }
   };
 
@@ -339,10 +348,7 @@ export function TeacherQuizBuilder() {
                 <button type="button" className="secondary" onClick={() => setEditor(activity)}>Edit</button>
                 <button type="button" className="secondary" onClick={() => deleteActivity(activity.id ?? '')}>Delete</button>
                 <button type="button" className="secondary" onClick={() => copyLink(activity.share_code ?? '')}>Copy link</button>
-                <button type="button" className="primary" onClick={async () => {
-                  const next = await publishQuizActivity({ ...activity, published: true, share_code: activity.share_code || '' });
-                  setActivities((current) => current.map((item) => item.id === next.id ? next : item));
-                }}>Publish</button>
+                <button type="button" className="primary" onClick={() => void publishExisting(activity)}>Publish</button>
               </div>
             </article>
           ))

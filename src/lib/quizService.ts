@@ -16,7 +16,17 @@ export type QuizQuestion = {
   workspace_config?: Record<string, unknown>;
 };
 
-export type QuizActivity = {
+/** Student payload intentionally has no answer key, explanation, or teacher-only fields. */
+export type StudentQuizQuestion = {
+  id: string;
+  question_type: QuestionType;
+  question_text: string;
+  options: string[];
+  question_order: number;
+  points: number;
+};
+
+type QuizActivityBase<TQuestion> = {
   id?: string;
   title: string;
   description?: string;
@@ -28,10 +38,13 @@ export type QuizActivity = {
   activity_type?: string;
   workspace_enabled?: boolean;
   workspace_config?: Record<string, unknown>;
-  questions: QuizQuestion[];
+  questions: TQuestion[];
   created_at?: string;
   updated_at?: string;
 };
+
+export type QuizActivity = QuizActivityBase<QuizQuestion>;
+export type StudentQuizActivity = QuizActivityBase<StudentQuizQuestion>;
 
 function generateShareCode() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -45,7 +58,7 @@ export async function listTeacherActivities(): Promise<QuizActivity[]> {
 
   const { data, error } = await supabase
     .from('quizzes')
-    .select('id, title, description, category, difficulty, time_limit, published, share_code, activity_type, workspace_enabled, workspace_config, created_at, updated_at, quiz_questions(*)')
+    .select('id, title, description, category, difficulty, time_limit, published, share_code, activity_type, workspace_enabled, workspace_config, created_at, updated_at, quiz_questions(id, question_type, question_text, options, correct_answer, explanation, hint, question_order, points, workspace_enabled, workspace_config)')
     .eq('teacher_id', user.id)
     .order('created_at', { ascending: false });
 
@@ -67,7 +80,7 @@ export async function listTeacherActivities(): Promise<QuizActivity[]> {
       id: question.id,
       question_type: question.question_type ?? 'multiple_choice',
       question_text: question.question_text ?? '',
-      choices: Array.isArray(question.choices) ? question.choices : [],
+      choices: Array.isArray(question.options) ? question.options : [],
       correct_answer: question.correct_answer ?? '',
       explanation: question.explanation ?? '',
       hint: question.hint ?? '',
@@ -114,7 +127,7 @@ export async function saveQuizActivity(activity: QuizActivity) {
     quiz_id: quiz.id,
     question_type: question.question_type,
     question_text: question.question_text,
-    choices: question.choices ?? [],
+    options: question.choices ?? [],
     correct_answer: question.correct_answer ?? '',
     explanation: question.explanation ?? '',
     hint: question.hint ?? '',
@@ -138,10 +151,10 @@ export async function publishQuizActivity(activity: QuizActivity) {
   return saveQuizActivity(nextActivity);
 }
 
-export async function getPublishedActivityByShareCode(shareCode: string): Promise<QuizActivity | null> {
+export async function getStudentActivityByShareCode(shareCode: string): Promise<StudentQuizActivity | null> {
   const { data, error } = await supabase
     .from('quizzes')
-    .select('id, title, description, category, difficulty, time_limit, published, share_code, activity_type, workspace_enabled, workspace_config, created_at, quiz_questions(*)')
+    .select('id, title, description, category, difficulty, time_limit, published, share_code, activity_type, workspace_enabled, workspace_config, created_at, quiz_questions(id, question_type, question_text, options, question_order, points)')
     .eq('share_code', shareCode)
     .eq('published', true)
     .maybeSingle();
@@ -165,14 +178,9 @@ export async function getPublishedActivityByShareCode(shareCode: string): Promis
       id: question.id,
       question_type: question.question_type ?? 'multiple_choice',
       question_text: question.question_text ?? '',
-      choices: Array.isArray(question.choices) ? question.choices : [],
-      correct_answer: question.correct_answer ?? '',
-      explanation: question.explanation ?? '',
-      hint: question.hint ?? '',
+      options: Array.isArray(question.options) ? question.options : [],
       question_order: Number(question.question_order ?? 0),
       points: Number(question.points ?? 1),
-      workspace_enabled: Boolean(question.workspace_enabled),
-      workspace_config: question.workspace_config ?? {},
     })),
     created_at: data.created_at,
   };

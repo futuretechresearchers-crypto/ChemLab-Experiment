@@ -1,48 +1,41 @@
 import { useEffect, useMemo, useState } from 'react';
 import ChemLabSimulator from './ChemLabSimulator';
-import { getCurrentProfile } from '../lib/auth';
-import { getPublishedActivityByShareCode, type QuizActivity, type QuizQuestion } from '../lib/quizService';
+import { getStudentActivityByShareCode, type StudentQuizActivity } from '../lib/quizService';
 import { supabase } from '../lib/supabase';
 import { AuthScreen } from './AuthScreen';
+import { StudentOnboarding } from './StudentOnboarding';
+import { useAuth } from '../lib/AuthContext';
 
 function getQuestionTypeLabel(questionType: string) {
   return questionType.replace(/_/g, ' ');
 }
 
-function normalizeAnswer(value: string | undefined) {
-  return (value ?? '').trim().toLowerCase();
-}
-
 export function StudentActivityPage({ shareCode }: { shareCode: string }) {
+  const { user, profile, loading: authLoading, profileError } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [activity, setActivity] = useState<QuizActivity | null>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
+  const [activity, setActivity] = useState<StudentQuizActivity | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [workspaceAnswers, setWorkspaceAnswers] = useState<Record<string, string>>({});
   const [timerLeft, setTimerLeft] = useState<number | null>(null);
   const [started, setStarted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
 
     async function load() {
-      const user = (await supabase.auth.getUser()).data.user;
-      const profileData = user ? await getCurrentProfile() : null;
-      if (!isMounted) return;
-      setCurrentUser(user);
-      setProfile(profileData);
-
       try {
-        const nextActivity = await getPublishedActivityByShareCode(shareCode);
+        const nextActivity = await getStudentActivityByShareCode(shareCode);
         if (!isMounted) return;
         setActivity(nextActivity);
         if (nextActivity?.time_limit) {
           setTimerLeft(nextActivity.time_limit * 60);
         }
       } catch (error) {
-        console.error(error);
+        if (import.meta.env.DEV) console.error('Activity load failed', error);
+        if (isMounted) setLoadError(true);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -68,48 +61,52 @@ export function StudentActivityPage({ shareCode }: { shareCode: string }) {
   const visibleQuestions = useMemo(() => activity?.questions ?? [], [activity]);
   const currentQuestion = visibleQuestions[currentIndex] ?? null;
 
-  if (loading) {
+  if (loading || authLoading) {
     return <main className="auth-page"><div className="auth-card"><p>Loading activity…</p></div></main>;
   }
 
-  if (!currentUser) {
+  if (!user) {
     return <AuthScreen returnTo={`/activity/${shareCode}`} />;
   }
+
+  if (profileError) return <main className="auth-page"><div className="auth-card" role="alert"><h1>We could not load your profile.</h1><p>Please refresh or sign out and try again.</p></div></main>;
+  if (!profile || !profile.onboarding_completed) return <StudentOnboarding />;
+
+  if (loadError) return <main className="auth-page"><div className="auth-card" role="alert"><span className="eyebrow">ACTIVITY UNAVAILABLE</span><h1>We could not load this activity.</h1><p>Please check your connection and try again.</p></div></main>;
 
   if (!activity) {
     return <main className="auth-page"><div className="auth-card"><span className="eyebrow">ACTIVITY UNAVAILABLE</span><h1>We could not find this activity.</h1><p>This link may be unpublished, expired, or invalid.</p></div></main>;
   }
 
-  if (profile?.role !== 'student') {
+  if (profile.role !== 'student') {
     return <main className="auth-page"><div className="auth-card"><span className="eyebrow">ACCESS DENIED</span><h1>Student account required</h1><p>Only a student profile can begin a live activity.</p></div></main>;
   }
 
   const submitActivity = async () => {
+    if (!activity?.id || !user || submitting) return;
     const total = visibleQuestions.length;
-    const score = visibleQuestions.reduce((sum, question) => {
-      const answer = answers[question.id ?? ''] ?? workspaceAnswers[question.id ?? ''];
-      if (!answer) return sum;
-      const correct = normalizeAnswer(question.correct_answer ?? '');
-      const value = normalizeAnswer(answer);
-      return value === correct ? sum + (Number(question.points ?? 1)) : sum;
-    }, 0);
-
     const attempt = {
       quiz_id: activity.id,
-      student_id: currentUser.id,
-      score,
+      student_id: user.id,
       total_questions: total,
       time_taken: activity.time_limit ? Math.max(1, activity.time_limit * 60 - (timerLeft ?? 0)) : null,
     };
 
+    setSubmitting(true);
+    setSubmitMessage(null);
+    // TODO: authoritative scoring, answer persistence, and trusted timing require
+    // a backend operation. Never download answer keys to this student client.
     const { error } = await supabase.from('quiz_attempts').insert(attempt);
     if (error) {
-      console.error(error);
+      if (import.meta.env.DEV) console.error('Activity attempt submission failed', error);
+      setSubmitMessage('We could not record this attempt. Please try again.');
+      setSubmitting(false);
       return;
     }
 
     setStarted(false);
-    alert(`Activity submitted. Score: ${score}/${total}.`);
+    setSubmitMessage('Attempt record saved. Answers and score are not saved yet; server grading is not configured.');
+    setSubmitting(false);
   };
 
   const updateAnswer = (questionId: string, value: string) => {
@@ -150,7 +147,7 @@ export function StudentActivityPage({ shareCode }: { shareCode: string }) {
 
             {currentQuestion.question_type === 'multiple_choice' && (
               <div className="choice-list">
-                {(currentQuestion.choices ?? []).map((choice) => (
+                {currentQuestion.options.map((choice) => (
                   <button
                     key={choice}
                     type="button"
@@ -190,32 +187,25 @@ export function StudentActivityPage({ shareCode }: { shareCode: string }) {
               </label>
             )}
 
-            {currentQuestion.workspace_enabled && (
+            {activity.workspace_enabled && (
               <div className="workspace-panel">
                 <div className="workspace-panel-header">
                   <span>ChemLab workspace</span>
                   <small>Use the chemistry simulator to validate the structure.</small>
                 </div>
-                <ChemLabSimulator
-                  onResultChange={(result) => {
-                    if (result && result.formula) {
-                      setWorkspaceAnswers((current) => ({ ...current, [currentQuestion.id ?? '']: result.formula }));
-                    }
-                  }}
-                />
+                <ChemLabSimulator />
               </div>
             )}
-
-            {currentQuestion.hint && <p className="question-hint">Hint: {currentQuestion.hint}</p>}
 
             <div className="activity-actions">
               <button type="button" className="secondary" onClick={previousQuestion} disabled={currentIndex === 0}>Previous</button>
               {currentIndex < visibleQuestions.length - 1 ? (
                 <button type="button" className="primary" onClick={nextQuestion}>Next</button>
               ) : (
-                <button type="button" className="primary" onClick={submitActivity}>Submit activity</button>
+                <button type="button" className="primary" onClick={submitActivity} disabled={submitting}>{submitting ? 'Submitting…' : 'Submit activity'}</button>
               )}
             </div>
+            {submitMessage && <p className={submitMessage.startsWith('We could not') ? 'form-message error' : 'form-message success'} role="status">{submitMessage}</p>}
           </>
         ) : null}
       </section>

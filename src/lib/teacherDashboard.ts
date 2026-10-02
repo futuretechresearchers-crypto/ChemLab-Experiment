@@ -7,9 +7,12 @@ export async function getTeacherDashboardData(): Promise<TeacherDashboardData> {
   if (!authData.user) throw new Error('Sign in with a teacher account to view this dashboard.');
 
   const userId = authData.user.id;
-  const [summaryResult, profileResult, attemptsResult] = await Promise.all([
+  const { data: profile, error: profileError } = await supabase.from('profiles').select('full_name, role').eq('id', userId).maybeSingle();
+  if (profileError) throw new Error('Your teacher profile could not be verified. Please retry or sign in again.');
+  if (profile?.role !== 'teacher') throw new Error('This account does not have teacher access.');
+
+  const [summaryResult, attemptsResult] = await Promise.all([
     supabase.rpc('teacher_dashboard_summary'),
-    supabase.from('profiles').select('full_name').eq('id', userId).maybeSingle(),
     supabase
       .from('quiz_attempts')
       .select('id, score, total_questions, time_taken, created_at, quiz:quizzes!inner(title, teacher_id), student:profiles(full_name)')
@@ -18,15 +21,14 @@ export async function getTeacherDashboardData(): Promise<TeacherDashboardData> {
       .limit(5),
   ]);
 
-  if (summaryResult.error || profileResult.error || attemptsResult.error) {
-    const error = summaryResult.error || profileResult.error || attemptsResult.error;
+  if (summaryResult.error || attemptsResult.error) {
+    const error = summaryResult.error || attemptsResult.error;
     if (error?.code === '42501') throw new Error('This account does not have teacher access.');
     throw new Error('Dashboard data could not be loaded. Please try again.');
   }
 
   const summaryValue: unknown = Array.isArray(summaryResult.data) ? summaryResult.data[0] : summaryResult.data;
-  if (!summaryValue || typeof summaryValue !== 'object') throw new Error('Dashboard data could not be loaded. Please try again.');
-  const summary = summaryValue as Record<string, unknown>;
+  const summary = summaryValue && typeof summaryValue === 'object' ? summaryValue as Record<string, unknown> : {};
   const asNumber = (value: unknown, nullAsZero = false): number => {
     if ((value === null || value === undefined || value === '') && nullAsZero) return 0;
     if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -63,12 +65,12 @@ export async function getTeacherDashboardData(): Promise<TeacherDashboardData> {
   });
 
   return {
-    teacherName: profileResult.data?.full_name || 'Teacher',
+    teacherName: profile?.full_name || 'Teacher',
     stats: {
-      quizzes: asNumber(summary.quizzes),
-      students: asNumber(summary.students),
+      quizzes: asNumber(summary.quizzes, true),
+      students: asNumber(summary.students, true),
       avgScore: asNumber(summary.avg_score, true),
-      attempts: asNumber(summary.attempts),
+      attempts: asNumber(summary.attempts, true),
     },
     recentResults,
   };

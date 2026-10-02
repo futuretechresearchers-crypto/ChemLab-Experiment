@@ -1,6 +1,9 @@
 .auth-page { min-height: calc(100vh - 74px); display: grid; place-items: center; padding: 40px 18px; }
 .auth-card { width: min(100%, 460px); background: rgba(255,255,255,.94); border: 1px solid #e6ddf8; border-radius: 24px; padding: 28px; box-shadow: 0 20px 55px rgba(95, 72, 146, 0.08); }
 .auth-header h1, .teacher-builder-topbar h1 { font-family: 'Fraunces', serif; font-size: clamp(2rem, 3vw, 3rem); margin: 8px 0 8px; }
+nav a { border: 0; background: transparent; padding: 9px 11px; color: #665f76; border-radius: 9px; text-decoration: none; white-space: nowrap; }
+nav a:hover { background: #f0ebfc; color: #7251c8; }
+.auth-actions { display: flex; gap: 10px; margin-top: 18px; }
 .auth-header p { color: #625b73; margin: 0 0 18px; }
 .auth-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #f4f0fb; border-radius: 12px; padding: 6px; margin-bottom: 18px; }
 .auth-toggle button { border: none; border-radius: 10px; padding: 10px 14px; background: transparent; color: #665f76; font-weight: 700; }
@@ -52,4 +55,35 @@
 .activity-card-actions, .activity-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 18px; }
 .answer-field { display: grid; gap: 8px; }
 .empty-state-card { text-align: center; padding: 42px 18px; }
+.onboarding-card { width: min(100%, 620px); }
+.onboarding-progress { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 0; margin: 18px 0 24px; list-style: none; counter-reset: onboarding; }
+.onboarding-progress li { counter-increment: onboarding; text-align: center; color: #8c849b; font-size: .78rem; font-weight: 700; border-bottom: 2px solid #e7e0f2; padding-bottom: 9px; }
+.onboarding-progress li::before { content: counter(onboarding) '. '; }
+.onboarding-progress li[aria-current="step"] { color: #7150b4; border-color: #8c68dc; }
+.identity-options { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.identity-options legend { font-weight: 700; margin-bottom: 8px; }
+.identity-option { display: flex; align-items: center; gap: 9px; padding: 14px; border: 1px solid #e7dff2; border-radius: 12px; background: #fff; cursor: pointer; }
+.identity-option.selected { border-color: #8c68dc; background: #f5f0ff; color: #5e43a1; }
+.identity-option input { width: auto; }
+.auth-form select { width: 100%; padding: 11px 12px; border: 1px solid #ded6e9; border-radius: 10px; background: #fff; color: #302b43; }
+.classroom-panel { max-width: 1200px; margin: 24px auto; padding: 22px; }
+.classroom-panel h2 { margin: 5px 0 12px; font-family: Fraunces, serif; }
+.classroom-create { display: flex; align-items: end; gap: 12px; margin: 14px 0; }
+.classroom-create label { flex: 1; display: grid; gap: 6px; font-weight: 600; }
+.classroom-create input { width: 100%; padding: 11px 12px; border: 1px solid #ded6e9; border-radius: 10px; }
+.classroom-list { display: grid; gap: 10px; }
+.classroom-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px; border: 1px solid #ede5f7; border-radius: 14px; background: #fdfcff; }
+.classroom-row h3, .classroom-row p { margin: 3px 0; }
+.classroom-row .classroom-url { color: #81788d; font-size: .85rem; overflow-wrap: anywhere; }
+.join-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.join-actions a, .classroom-row button { text-decoration: none; border-radius: 10px; }
+.join-confirmation { max-width: 1200px; margin: 18px auto 0; padding: 12px 16px; border-radius: 12px; background: #edfdf4; color: #1f7d43; }
+.student-shortcuts { max-width: 1200px; margin: 0 auto 24px; padding: 0 18px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.student-shortcuts a { padding: 17px; display: grid; gap: 5px; text-decoration: none; color: #40325c; }
+.student-shortcuts span { color: #81788d; font-size: .9rem; }
+.student-code-form { display: flex; align-items: end; gap: 12px; margin: 20px 0; }
+.student-code-form label { flex: 1; display: grid; gap: 7px; font-weight: 700; }
+.student-code-form input { width: 100%; padding: 11px 12px; border: 1px solid #ded6e9; border-radius: 10px; }
+@media (max-width: 650px) { .classroom-create, .classroom-row { align-items: stretch; flex-direction: column; } .classroom-panel { margin: 16px 12px; } }
+@media (max-width: 650px) { .student-shortcuts { grid-template-columns: 1fr; } .student-code-form { align-items: stretch; flex-direction: column; } }
 @media (max-width: 860px) { .builder-editor-grid { grid-template-columns: 1fr; } .activity-list-item { flex-direction: column; } .teacher-builder-topbar, .activity-header { flex-direction: column; align-items: flex-start; } .builder-actions, .activity-list-actions { width: 100%; } }
