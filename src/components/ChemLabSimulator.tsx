@@ -6,6 +6,10 @@ import { getCompatibleElements, validateReaction } from '../engine/reactionEngin
 import type { Atom, ElementData, ReactionResult } from '../types/chemistry';
 import PeriodicTable from './chemsim/PeriodicTable';
 
+type ChemLabSimulatorProps = {
+  onResultChange?: (result: ReactionResult) => void;
+};
+
 type SimulationState = 'IDLE'|'SELECTING'|'READY'|'VALIDATING'|'DETECTED'|'ATTRACTING'|'ELECTRON_TRANSFER'|'ELECTRON_SHARING'|'LEWIS_GENERATION'|'FORMING'|'OCTET_CHECK'|'SUCCESS'|'INVALID'|'TIME_EXPIRED';
 const categoryColor: Record<string, string> = {
   'alkali metal':'25 95% 60%', 'alkaline earth metal':'45 90% 55%', 'transition metal':'200 80% 55%', 'post-transition metal':'200 80% 55%', lanthanide:'200 80% 55%', actinide:'200 80% 55%', metalloid:'140 70% 50%', 'reactive nonmetal':'140 70% 50%', halogen:'290 75% 65%', 'noble gas':'180 70% 55%'
@@ -36,11 +40,12 @@ function CompoundVisual({ result, lewis }: { result: ReactionResult; lewis?: Ret
     {lewis && <pre aria-label="Lewis structure preview">{lewis.bonds}</pre>}
   </div>;
 }
-export default function ChemLabSimulator() {
+export default function ChemLabSimulator({ onResultChange }: ChemLabSimulatorProps) {
   const [atoms,setAtoms] = useState<Atom[]>([]); const [selectedSymbol,setSelectedSymbol] = useState<string>();
   const [result,setResult] = useState<ReactionResult>({valid:false,reactants:[],products:[],feedback:'Choose an element, then add a precise reactant group.'});
   const [phase,setPhase] = useState<SimulationState>('IDLE'); const [seconds,setSeconds] = useState(45); const [history,setHistory] = useState<string[]>([]); const [showBond,setShowBond] = useState(false); const [tab,setTab] = useState<'Compound'|'Shell Sim'|'Lewis'|'How?'|'Analysis'>('Compound'); const [orbitalAngle,setOrbitalAngle] = useState(0);
   const frame = useRef<number>(); const timers = useRef<number[]>([]);
+  useEffect(() => { onResultChange?.(result); }, [onResultChange, result]);
   useEffect(() => { let last=0; const orbit=(time:number) => { if (time-last>33) { setOrbitalAngle((time/24)%360); last=time; } frame.current=requestAnimationFrame(orbit); }; frame.current=requestAnimationFrame(orbit); return () => { if(frame.current) cancelAnimationFrame(frame.current); timers.current.forEach(clearTimeout); }; },[]);
   useEffect(() => { if (!atoms.length || ['SUCCESS','TIME_EXPIRED'].includes(phase) || seconds <= 0) return; const timer=window.setTimeout(() => { if(seconds===1) { setSeconds(0);setPhase('TIME_EXPIRED'); } else setSeconds(s=>s-1); },1000); return () => clearTimeout(timer); },[seconds,atoms.length,phase]);
   const add = (symbol:string) => { const element=elementBySymbol(symbol); if(!element) return; setSelectedSymbol(symbol); setAtoms(current => [...current,{id:crypto.randomUUID(),element,x:0,y:0,state:'idle'}]); setSeconds(current => atoms.length ? current : 45); setPhase('SELECTING'); setResult({valid:false,reactants:[],products:[],feedback:`${element.name} added. Add the exact quantities required, then start the reaction.`}); };

@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import './styles.css';
+import './custom.css';
 import './chemlab-system.css';
 import './chemsim-controls.css';
 import './modal.css';
