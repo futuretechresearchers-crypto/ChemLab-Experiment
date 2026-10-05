@@ -14,6 +14,7 @@ docker compose -f docker-compose.base44.yml up -d
 
 ## Environment / Secrets
 - `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are **required at boot** — `src/lib/supabase.ts` throws without them.
+- `supabase.ts` normalizes the URL: accepts a bare project ref (e.g. `fqtofogbhimpxhywvpw`) or hostname without protocol, constructing `https://<ref>.supabase.co` automatically.
 - `.env.base44-defaults` holds placeholder values so the app boots; real values in `/run/base44/app.env` override them.
 - The lab page (`/`) works without valid Supabase credentials. Auth, onboarding, teacher/student dashboards, and classroom features require real Supabase credentials + the migration in `supabase/migrations/`.
 
